@@ -1,0 +1,102 @@
+---
+title: "Simulation of carriage study"
+author: "Dan Weinberger"
+date: "October 10, 2018"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Simulation study
+
+In this example, we perform a simulation of a carriage study. The data are simulated from a Markov transition model with 2 states (colonized vs uncolonized). People transition from uncolonized to colonized with some acquisition rate (which depends on SES status of the individual and the time of the year), and people transition from colonized to uncolonized according to a clearance rate (1/duration)
+
+```{r load_packages, include=FALSE}
+library(plyr)
+library(dplyr)
+library(abind)
+library(lme4)
+library(mgcv)
+library(lubridate)
+library(Hmisc)
+library(msm)
+library(Matrix)
+library(geepack)
+library(doBy)
+
+source('C:/Users/dmw63/Desktop/My documents h/Pfizer carriage/carriage-simulation/functions.R')
+```
+
+```{r set_parameters}
+ntimes<-365*2 #How much observation time per person (in days)
+n.people <- 3000 #How many people in total population- (set to 3000)
+nsim=50  #How many simulations
+qtr.rr<-c(1,0.8,0.4,1.2) #How much does acquisition rate differ by quarter (vs QTR1) 
+init.prev=0.05 #initialize prevalence at t=1
+duration<-18
+```
+
+```{r date_setup, echo=FALSE}
+obs.dates.vec<-seq(from=as.Date('2018/07/01'),length.out=ntimes, by="day")
+qtr.vec<-quarter(obs.dates.vec)
+qtr.rr.vec<-rep(qtr.rr[1], times=length(qtr.vec))
+for(i in c(2:4)){qtr.rr.vec[qtr.vec==i] <- qtr.rr[i]}
+```
+
+#Generate the "true" data for each population 
+And take some samples for each person (mix of cross-sectional and longitudinal)
+Base the parameters on Rochester study. If clearance times are exponentially distributed,
+then probability of being cleared is given as: 1-exp(-lambda*t); where lambda is clearance rate
+and t is time in days. According to Rochester study, 54% of events lasted <2weeks (mean=10 days, median=77 days). So setting duration at 18 days gives a 54% chance of clearance by 2 weeks.
+
+```{r generate_data}
+set.seed(4567)
+ses.grp<-replicate(n.people, rbinom(n=1, size=1, prob=0.5 ), simplify=FALSE) #Randomly assign people to high or low ses
+ses.grp.vector<-sapply(ses.grp, function(x) x) #Vector of SES grp membership for each person
+ses.grp.key<-cbind.data.frame(id=1:length(ses.grp.vector), ses.grp.vector)
+true.col<-replicate(nsim, generate_replicates(acq.rate= 1.5/365,clear.rate= 1/duration  ,ses.rr=1/1.5, init.prev=init.prev), simplify=FALSE)
+point.prev<-sapply(true.col, function(x) apply(x,1,mean))
+matplot(obs.dates.vec,point.prev, type='l', ylim=c(0,0.15), bty='l', ylab="Point prevalence")
+#Draw samples from true data to check
+samples1<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=500 ,n.cross.people=500)) 
+```
+
+#True vs estimated prevalence
+Compare the true prevalence with estimated prevalence for each of the simulated datasets
+
+```{r evaluate_prevalence}
+prev.est<-sapply(samples1, function(x) mean(x$col))
+prev.true<-sapply(true.col, function(x) mean(x))
+par(mfrow=c(1,3))
+hist(prev.est, main="Estimated prevalence from samples", xlim=c(0,0.2))
+hist(prev.true, main="True prevalence in each simulated population", xlim=c(0,0.2))
+plot(prev.est, prev.true,xlim=c(0,0.2), ylim=c(0,0.2), bty='l', main="True vs estimated prevalence", ylab="True prevalence", xlab='Estimated prevalence')
+
+```
+
+#Try some alternative sampling schemes
+
+```{r generate }
+samples1<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=500 ,n.cross.people=500)) 
+samples2<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,14,28,42,56, 70),                           n.long.people=500 ,n.cross.people=500)) 
+samples3<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=2 ,n.cross.people=1000)) 
+samples4<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=634 ,n.cross.people=2200)) #proposed parameter for Pfizer study
+samples5<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=2 ,n.cross.people=2998)) 
+samples6<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=1000 ,n.cross.people=2)) 
+```
+
+#Fit GEE models to evaluate power to detect SES effect
+```{r models}
+##Gee to test difference in prev by group
+ return_gee(samples1)
+ return_gee(samples2)
+ return_gee(samples3)
+ return_gee(samples4)
+ return_gee(samples5)
+  return_gee(samples6)
+
+
+```
