@@ -101,37 +101,101 @@ return_gee<-function(samps){
     #Which people are sampled on which dates?
 
     ##Use markov transition model
-    markov.func<-function(ds, covars){
+    markov.func<-function(ds, ses.key){
       Q <- rbind ( c(-1, 1),
                    + c(1, -1))
-      #ds<-ds[1:(nrow(ds)-2),] #last 2 rows are just 2 cross sectional people
+      ds<-merge(ds,ses.key, by='id')
+      ds$date<-as.Date('2019/9/30') + ds$sample.index
+      ds$qtr<-quarter(ds$date)
+      ds$qtr2<-0
+      ds$qtr3<-0
+      ds$qtr4<-0
+      ds$qtr2[ds$qtr==2]<-1
+      ds$qtr3[ds$qtr==3]<-1
+      ds$qtr4[ds$qtr==4]<-1
       ds.split<-split(ds, ds$id)
       n.obs<-sapply(ds.split, nrow)
       ds.split<-ds.split[n.obs>1]
       ds2<-lapply(ds.split, day.index.func )
       ds2<-do.call(rbind.data.frame, ds2)
-      test.msm <- msm( state ~ day.index, subject=id, covariates=list("1-2"= ~ ses, "1-2"=~qtr2,"1-2"=~qtr4), data = ds2, qmatrix=Q, gen.inits=TRUE)  
+      ds2$state<-ds2$col+1
+      test.msm <- msm( state ~ day.index, subject=id, covariates=list("1-2"= ~ ses.grp.vector, "1-2"=~qtr2,"1-2"=~qtr4), data = ds2, qmatrix=Q, gen.inits=TRUE)  
       #sojourn.msm(test.msm, covariates=list(inc.grp.vec=1))
       #est.transition.comp<-qmatrix.msm(test.msm)
-      acq.rate.ratio<-hazard.msm(test.msm)[['ses']]['State 1 - State 2',]
+      acq.rate.ratio<-hazard.msm(test.msm)[['ses.grp.vector']]['State 1 - State 2',]
       acq.rate.low<- 
       if(length(acq.rate.ratio)<3){
         acq.rate.ratio<-c(acq.rate.ratio,NA,NA)
       }
       max.t<-max(ds2$day.index)
-      prev.state.low.ses<-totlos.msm(test.msm, tot=max.t, covariates=list(ses=0), ci='normal')/max.t 
-      prev.state.hi.ses<-totlos.msm(test.msm, tot=max.t, covariates=list(ses=1), ci='normal') /max.t 
-      prob.transition.low.ses<-pmatrix.msm(test.msm, t=1, covariates=list(ses=0), ci='normal')
-      prob.transition.high.ses<-pmatrix.msm(test.msm, t=1, covariates=list(ses=1), ci='normal')
-      out.list<-list(acq.rate.ratio,los.state.low.ses,los.state.hi.ses ,prob.transition.low.ses,prob.transition.high.ses  )
+      prev.state.low.ses<-totlos.msm(test.msm, tot=max.t, covariates=list(ses.grp.vector=0), ci='normal')/max.t 
+      prev.state.hi.ses<-totlos.msm(test.msm, tot=max.t, covariates=list(ses.grp.vector=1), ci='normal') /max.t 
+      prob.transition.low.ses<-pmatrix.msm(test.msm, t=1, covariates=list(ses.grp.vector=0), ci='normal')
+      prob.transition.high.ses<-pmatrix.msm(test.msm, t=1, covariates=list(ses.grp.vector=1), ci='normal')
+      out.list<-list(acq.rate.ratio=acq.rate.ratio,prob.transition.low.ses=prob.transition.low.ses,prob.transition.high.ses=prob.transition.high.ses ,prev.state.low.ses=prev.state.low.ses,prev.state.hi.ses=prev.state.hi.ses )
       return(out.list)
     }
    
     day.index.func<-function(ds1){
-      ds1$day.index<- ds1$day -min(ds1$day)
+      ds1$day.index<- ds1$sample.index - min(ds1$sample.index)
       return(ds1)
     }
+    #Extract hazard ratios
+    return_acq_rate_ratio<-function(ds){
+      ds$acq.rate.ratio
+    }
+    #Plot hazard ratios
+    plot_acq_rate_ratio<-function(ds){
+      ds2<- as.data.frame(t( sapply(ds,return_acq_rate_ratio) ))
+      power<- mean(ds2$U<1)*100
+      plot(1:nrow(ds2),ds2$HR, ylim=c(0.2,2), bty='l', ylab="Hazard Ratio", xlab="Simulation")
+      abline(h=1, lty=2, col='gray')
+      abline(h=1/1.5, lty=3, col='red')
+      arrows(1:nrow(ds2), ds2$L, 1:nrow(ds2), ds2$U, length=0.0, angle=90, code=3)
+      title(paste0("Power: ", power,"%"))
+    }
+    #Extract transition.prob
+    return_transition_prob<-function(ds){
+     high.ses<-cbind.data.frame(median=ds$prob.transition.high.ses$estimates[1,2],L=ds$prob.transition.high.ses$L[1,2],U=ds$prob.transition.high.ses$U[1,2], ses="high")
+     low.ses<-cbind.data.frame(median=ds$prob.transition.low.ses$estimates[1,2],L=ds$prob.transition.low.ses$L[1,2],U=ds$prob.transition.low.ses$U[1,2], ses="Low")
+     duration<-cbind.data.frame(median=1/ds$prob.transition.low.ses$estimates[2,1],L=1/ds$prob.transition.low.ses$L[2,1],U=1/ds$prob.transition.low.ses$U[2,1], ses="Duration")
+     acquisition.rates<-rbind.data.frame(high.ses,low.ses,duration)
+     return(acquisition.rates)
+     }
+    #Plot durations
+    plot_duration<-function(ds,duration){
+      ds2<-  lapply(ds,function(x) return_transition_prob(x) ) 
+      ds2<- lapply(ds2, function(x) x[x$ses=='Duration',1:3])   
+      ds2<- do.call(rbind, ds2)
+      
+      power<- mean(  ds2$L>=duration & ds2$U<=duration)*100
+      plot(1:nrow(ds2),ds2$median, ylim=c(5,40), bty='l', ylab="Duration", xlab="Simulation")
+      abline(h=duration, lty=3, col='red')
+      arrows(1:nrow(ds2), ds2$L, 1:nrow(ds2), ds2$U, length=0.0, angle=90, code=3)
+      title(paste0("Power: ", power,"%"))
+    }
+    #Plot acquistion rates
+    plot_acq_rate<-function(ds,set.acq.rate,set.ses.effect){
+      ds1a<-  lapply(ds,function(x) return_transition_prob(x) ) 
+      ds2.lo<- lapply(ds1a, function(x) x[x$ses=='Low',1:3])   
+      ds2.lo<- do.call(rbind, ds2.lo)
+      ds2.hi<- lapply(ds1a, function(x) x[x$ses=='high',1:3])   
+      ds2.hi<- do.call(rbind, ds2.hi)
+      
+      power.lo<- mean(  ds2.lo$U>=set.acq.rate & ds2.lo$L<=set.acq.rate)*100
+      power.hi<- mean(  ds2.hi$U>=set.acq.rate*1/set.ses.effect & ds2.hi$L<=set.acq.rate*1/set.ses.effect)*100
+      par(mfrow=c(1,2))
+     #plot1
+      plot.range<-range(cbind(ds2.hi,ds2.lo))
+      plot(1:nrow(ds2.lo),ds2.lo$median, bty='l',ylim=plot.range, ylab="Duration", xlab="Simulation")
+      abline(h=set.acq.rate, lty=3, col='red')
+      arrows(1:nrow(ds2.lo), ds2.lo$L, 1:nrow(ds2.lo), ds2.lo$U, length=0.0, angle=90, code=3)
+      title(paste0("Power Lo/High: ", power.lo,"%/ ", power.hi,"%"))
+      #Plot2
+      plot(1:nrow(ds2.hi),ds2.hi$median,ylim=plot.range, bty='l', ylab="Duration", xlab="Simulation")
+      points(1:nrow(ds2.hi),ds2.hi$median, ylim=c(5,40), bty='l', ylab="Duration", xlab="Simulation")
+      abline(h=set.acq.rate*1/set.ses.effect, lty=3, col='pink')
+      arrows(1:nrow(ds2.hi), ds2.hi$L,1:nrow(ds2.hi), ds2.hi$U, length=0.0, angle=90, code=3)
+      
+    }
     
-
-  
-

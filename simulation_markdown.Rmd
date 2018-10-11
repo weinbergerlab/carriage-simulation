@@ -2,8 +2,10 @@
 title: "Simulation of carriage study"
 author: "Dan Weinberger"
 date: "October 10, 2018"
-output:
-  html_document: default
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
 ---
 
 ```{r setup, include=FALSE}
@@ -36,7 +38,9 @@ n.people <- 3000 #How many people in total population- (set to 3000)
 nsim=50  #How many simulations
 qtr.rr<-c(1,0.8,0.4,1.2) #How much does acquisition rate differ by quarter (vs QTR1) 
 init.prev=0.05 #initialize prevalence at t=1
-duration<-18
+duration<-18  #See note below about the choice of duration: this results in 54% of people clearing within                          14 days
+set.acq.rate<-1.5/365
+set.ses.effect<-1.5 #How much higher is acq rate in low vs high?
 ```
 
 ```{r date_setup, echo=FALSE}
@@ -57,7 +61,7 @@ set.seed(4567)
 ses.grp<-replicate(n.people, rbinom(n=1, size=1, prob=0.5 ), simplify=FALSE) #Randomly assign people to high or low ses
 ses.grp.vector<-sapply(ses.grp, function(x) x) #Vector of SES grp membership for each person
 ses.grp.key<-cbind.data.frame(id=1:length(ses.grp.vector), ses.grp.vector)
-true.col<-replicate(nsim, generate_replicates(acq.rate= 1.5/365,clear.rate= 1/duration  ,ses.rr=1/1.5, init.prev=init.prev), simplify=FALSE)
+true.col<-replicate(nsim, generate_replicates(acq.rate= set.acq.rate,clear.rate= 1/duration  ,ses.rr=1/set.ses.effect, init.prev=init.prev), simplify=FALSE)
 point.prev<-sapply(true.col, function(x) apply(x,1,mean))
 matplot(obs.dates.vec,point.prev, type='l', ylim=c(0,0.15), bty='l', ylab="Point prevalence")
 #Draw samples from true data to check
@@ -86,6 +90,7 @@ samples3<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,2
 samples4<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=634 ,n.cross.people=2200)) #proposed parameter for Pfizer study
 samples5<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=2 ,n.cross.people=2998)) 
 samples6<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=1000 ,n.cross.people=2)) 
+samples7<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=317 ,n.cross.people=1100)) #same as sample 4, with half samples
 ```
 
 #Fit GEE models to evaluate power to detect SES effect
@@ -97,6 +102,46 @@ samples6<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,2
  return_gee(samples4)
  return_gee(samples5)
   return_gee(samples6)
+  return_gee(samples7)
 
 
+```
+
+#Use Markov transition model to estimate acquistion and clearance rates
+```{r markov}
+markov1<-lapply(samples1, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov2<-lapply(samples2, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov4<-lapply(samples4, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov6<-lapply(samples6, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov7<-lapply(samples7, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+
+```
+
+```{r plotmarkov}
+plot_acq_rate_ratio(markov1)
+plot_acq_rate_ratio(markov2)
+plot_acq_rate_ratio(markov4)
+plot_acq_rate_ratio(markov6)
+plot_acq_rate_ratio(markov7)
+```
+
+#Power to correctly detect duration 
+
+```{r duration}
+plot_duration(markov1,duration=duration)
+plot_duration(markov2,duration=duration)
+plot_duration(markov4,duration=duration)
+plot_duration(markov6,duration=duration)
+plot_duration(markov7,duration=duration)
+
+```
+
+#Power to detect acquisition rate for low and high SES
+
+```{r acqrate}
+plot_acq_rate(markov1,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov2,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov4,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov6,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov7,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 ```
