@@ -91,6 +91,9 @@ samples4<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,2
 samples5<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=2 ,n.cross.people=2998)) 
 samples6<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=1000 ,n.cross.people=2)) 
 samples7<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=317 ,n.cross.people=1100)) #same as sample 4, with half samples
+samples8<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,2,7,28,70),   n.long.people=52 ,n.cross.people=2)) #al shaw flu clinic
+samples9<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,14,28,42),   n.long.people=634 ,n.cross.people=2200)) #half 7 day intervals, half 14 day
+samples10<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,14,28,60),   n.long.people=634 ,n.cross.people=2200)) #same as 8 but stretch out final reading to 2 months
 ```
 
 #Fit GEE models to evaluate power to detect SES effect
@@ -103,6 +106,9 @@ samples7<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,2
  return_gee(samples5)
   return_gee(samples6)
   return_gee(samples7)
+  return_gee(samples8)
+  return_gee(samples9)
+  return_gee(samples10)
 
 
 ```
@@ -114,6 +120,9 @@ markov2<-lapply(samples2, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
 markov4<-lapply(samples4, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
 markov6<-lapply(samples6, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
 markov7<-lapply(samples7, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+#markov8<-lapply(samples8, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov9<-lapply(samples9, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov10<-lapply(samples10, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
 
 ```
 
@@ -123,6 +132,10 @@ plot_acq_rate_ratio(markov2)
 plot_acq_rate_ratio(markov4)
 plot_acq_rate_ratio(markov6)
 plot_acq_rate_ratio(markov7)
+#plot_acq_rate_ratio(markov8)
+plot_acq_rate_ratio(markov9)
+plot_acq_rate_ratio(markov10)
+
 ```
 
 #Power to correctly detect duration 
@@ -133,6 +146,9 @@ plot_duration(markov2,duration=duration)
 plot_duration(markov4,duration=duration)
 plot_duration(markov6,duration=duration)
 plot_duration(markov7,duration=duration)
+#plot_duration(markov8,duration=duration)
+plot_duration(markov9,duration=duration)
+plot_duration(markov10,duration=duration)
 
 ```
 
@@ -144,4 +160,8 @@ plot_acq_rate(markov2,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 plot_acq_rate(markov4,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 plot_acq_rate(markov6,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 plot_acq_rate(markov7,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+#plot_acq_rate(markov8,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov9,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov10,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+
 ```
