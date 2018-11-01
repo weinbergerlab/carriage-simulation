@@ -165,3 +165,18 @@ plot_acq_rate(markov9,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 plot_acq_rate(markov10,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 
 ```
+
+#Calculate the Mean-squared error for each sampling scheme when estimating acquistion rate--this is calculated by comparing the median estimate from the model ine ach of the 50 simulations with the true, unobserved value. Lower values indicate lower bias.
+
+
+```{r mse_acq_rate}
+mse_acq_rate(markov1,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+mse_acq_rate(markov2,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+mse_acq_rate(markov4,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+mse_acq_rate(markov6,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+mse_acq_rate(markov7,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+#plot_acq_rate(markov8,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+mse_acq_rate(markov9,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+mse_acq_rate(markov10,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+
+```
