@@ -1,0 +1,254 @@
+---
+title: "Simulation of carriage study"
+author: "Dan Weinberger"
+date: "October 10, 2018"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Simulation study
+
+In this example, we perform a simulation of a carriage study. The data are simulated from a Markov transition model with 2 states (colonized vs uncolonized). People transition from uncolonized to colonized with some acquisition rate (which depends on SES status of the individual and the time of the year), and people transition from colonized to uncolonized according to a clearance rate (1/duration)
+
+```{r load_packages, include=FALSE}
+library(plyr)
+library(reshape2)
+library(rjags)
+library(dplyr)
+library(minqa)
+library(abind)
+library(lme4)
+library(mgcv)
+library(lubridate)
+library(zoo)
+library(Hmisc)
+library(msm)
+library(Matrix)
+library(geepack)
+library(doBy)
+
+source('C:/Users/dmw63/Desktop/My documents h/Pfizer carriage/carriage-simulation/functions.R')
+```
+
+```{r set_parameters}
+ntimes<-365*2 #How much observation time per person (in days)
+n.people <- 500  #How many people in total population- (set to 3000)
+nsim=50  #How many simulations
+qtr.rr<-c(1,0.8,0.4,1.2) #How much does acquisition rate differ by quarter (vs QTR1) 
+init.prev=0.05 #initialize prevalence at t=1 if have 0.042 init, then half pop will have prev of 0063, half will be 0.04=0.05
+duration<-18  #See note below about the choice of duration: this results in 54% of people clearing within                          14 days
+
+# acq rate of 1/365, ses effect of 1.5 and transmission prob of 0.01 gives prevalence of 0.059
+set.acq.rate<-2/365 
+set.ses.effect<-1.0 #How much higher is acq rate in low vs high?
+prob.transmit<-0.1 #prob transmit to HH member--could set to 0.01 or 0.05 
+prob.transmit.day<-prob.transmit/duration
+
+```
+
+```{r date_setup, echo=FALSE}
+obs.dates.vec<-seq(from=as.Date('2018/07/01'),length.out=ntimes, by="day")
+qtr.vec<-quarter(obs.dates.vec)
+qtr.rr.vec<-rep(qtr.rr[1], times=length(qtr.vec))
+for(i in c(2:4)){qtr.rr.vec[qtr.vec==i] <- qtr.rr[i]}
+```
+
+#Generate the "true" data for each population 
+And take some samples for each person (mix of cross-sectional and longitudinal)
+Base the parameters on Rochester study. If clearance times are exponentially distributed,
+then probability of being cleared is given as: 1-exp(-lambda*t); where lambda is clearance rate
+and t is time in days. According to Rochester study, 54% of events lasted <2weeks (mean=10 days, median=77 days). So setting duration at 18 days gives a 54% chance of clearance by 2 weeks.
+
+```{r generate_data2}
+ nsim=10
+ ses.hh.vector<- c( rep(0, times=n.people/4), rep(1, times=n.people/4)) #half grps low SES, half high
+ ses.grp.vector<- rep(ses.hh.vector, each=2)
+ ses.grp.key<-cbind.data.frame(id=1:length(ses.grp.vector), ses.grp.vector)
+ set.seed(123)
+ #Generate samples
+ true.col<-replicate(nsim, gen.pair.data(acq.rate= set.acq.rate,clear.rate= 1/duration,prob.transmit=prob.transmit,duration=duration), simplify=FALSE)
+  point.prev<-sapply(true.col, function(x) apply(x,1,mean))
+ matplot(obs.dates.vec,point.prev, type='l', ylim=c(0,0.15), bty='l', ylab="Point prevalence")
+
+  
+samples1<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=500 ,n.cross.people=0, hh=T)) 
+
+samples2<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=400 ,n.cross.people=0,hh=T)) 
+
+samples3<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=300 ,n.cross.people=0, hh=T)) 
+
+#test1<-t(true.col[[1]])
+#test2<-test1[3:4, 160:220]
+#samples.test<-samples1[[1]]
+```
+
+
+
+#True vs estimated prevalence
+Compare the true prevalence with estimated prevalence for each of the simulated datasets
+
+```{r evaluate_prevalence}
+prev.est<-sapply(samples1, function(x) mean(x$col))
+prev.true<-sapply(true.col, function(x) mean(x))
+par(mfrow=c(1,3))
+hist(prev.est, main="Estimated prevalence from samples", xlim=c(0,0.2))
+hist(prev.true, main="True prevalence in each simulated population", xlim=c(0,0.2))
+plot(prev.est, prev.true,xlim=c(0,0.2), ylim=c(0,0.2), bty='l', main="True vs estimated prevalence", ylab="True prevalence", xlab='Estimated prevalence')
+
+```
+
+
+#Fit GEE models to evaluate power to detect SES effect
+```{r models}
+##Gee to test difference in prev by group
+ return_gee(samples1)
+ return_gee(samples2)
+ return_gee(samples3)
+
+
+```
+
+#Use Markov transition model to estimate acquistion and clearance rates
+```{r markov}
+markov1<-lapply(samples1, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov2<-lapply(samples2, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+markov3<-lapply(samples3, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
+
+```
+
+```{r plotmarkov}
+plot_acq_rate_ratio(markov1)
+plot_acq_rate_ratio(markov2)
+plot_acq_rate_ratio(markov3)
+
+```
+
+#Power to correctly detect duration 
+
+```{r duration}
+plot_duration(markov1,duration=duration)
+plot_duration(markov2,duration=duration)
+plot_duration(markov3,duration=duration)
+
+```
+
+#Power to detect acquisition rate for low and high SES
+
+```{r acqrate}
+plot_acq_rate(markov1,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov2,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+plot_acq_rate(markov3,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+
+```
+
+
+#Calculate the Mean-squared error for each sampling scheme when estimating acquistion rate--this is calculated by comparing the median estimate from the model ine ach of the 50 simulations with the true, unobserved value. Lower values indicate lower bias.
+```{r mse_acq_rate}
+mse_acq_rate(markov1,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
+```
+
+## household information
+
+Use the colonization status of the partner at previous time as predictor of acquisition (downside: can only )
+```{r}
+
+markov1.hh<-lapply(samples1, function(x)  markov.func(ds=x,ses.key=ses.grp.key,hh.txn=T))
+
+
+##Pull out HH transmission effect
+hh.txn.rr<-sapply(markov1.hh, "[[", 'acq.rate.ratio.hh')
+ses.rr<-sapply(markov1.hh, "[[", 'acq.rate.ratio')
+
+
+```
+
+
+#New acq
+```{r}
+
+t1<-samples1[[1]]
+t1.spl<-split(t1, t1$id)
+t1.spl<-lapply(t1.spl, function(x) {lag(x$col, lag=1, na.pad = TRUE)
+  return(x) })
+t2<-do.call(rbind, t1.spl)
+t2$col.lag<- lag(t1$col, lag=1, na.pad = TRUE)
+t2$new.acq<-NA
+t2$new.acq[t2$col==1 & t2$col.lag==0] <-1
+t2$new.acq[t2$col==0]<-0 #eligible to acquire if negative and not first time points
+t2$new.acq[is.na(t2$col.lag)]<-NA #first time point can't acquire
+t2$pair<- rep(c(1:(n.people/2)), each=2)
+table(t2$new.acq)
+
+time.points<- sum(ds$id==1) # how many samples per person
+        t2$t<-rep(1:time.points, times=n.people)
+        t3<-t2[,c('t','id','new.acq')]
+        t3.m<-melt(t3, id.vars=c('id','t'))
+        test1.c<-acast(t3.m,id~t)
+        pair<-rep(c(1:(n.people/2)), each=2)
+        test1.c.spl<-split(test1.c,pair)
+        test1.c.spl<-lapply(test1.c.spl, function(x) matrix(x, nrow=2))
+       
+        n.new.acq.person<-t(sapply(test1.c.spl, function(x) apply(x,1,sum, na.rm=T)))
+        co.occurrence<-rep(NA, nrow(n.new.acq.person))
+        co.occurrence[rowSums(n.new.acq.person)==0]<-1 #neither has new acq
+        co.occurrence[(n.new.acq.person[,1]==0 & n.new.acq.person[,2]>0) |(n.new.acq.person[,2]==0 & n.new.acq.person[,1]>0)]<-2 #one person has new acq
+        co.occurrence[(n.new.acq.person[,1]>0 & n.new.acq.person[,2]>0)]  <-3 #both people have new acq
+       obs.co.occur<- as.numeric(table(co.occurrence))[3]
+       
+       #Regression to test if prevalence in partner is predictive of acquisition...
+       
+        
+      ##Could do a Monte Carlo, switching group assignment labels, and see if n people in category 3 is unusual
+       ##NOTE THIS ONLY WORKSIF RISK IS UNIFORM BETWEEN PAIRS--THIS WILL DEFINITELY NOT BE THE CASE...
+#        mc.co.occurrence.func<-function(ds){
+#          n.new.acq.person.MC<-ds
+#         n.new.acq.person.MC[,2]<-sample(n.new.acq.person.MC[,2]) #shuffle the column
+#          co.occurrence.mc<-rep(NA, nrow(n.new.acq.person.MC))
+#         co.occurrence.mc[rowSums(n.new.acq.person.MC)==0]<-1 #neither has new acq
+#         co.occurrence.mc[(n.new.acq.person.MC[,1]==0 & n.new.acq.person.MC[,2]>0) |(n.new.acq.person.MC[,2]==0 & n.new.acq.person.MC[,1]>0)]<-2 #one person has new acq
+#         co.occurrence.mc[(n.new.acq.person.MC[,1]>0 & n.new.acq.person.MC[,2]>0)]  <-3 #both people have new acq
+#         as.numeric(table(co.occurrence.mc)[3])
+# }
+#          mc.co.occur<-replicate(999, mc.co.occurrence.func(ds=n.new.acq.person))  
+#          hist(mc.co.occur)
+#          abline(v=obs.co.occur, lty=2, col='red')
+```
+
+
+## Alternative structure for MSM
+The units of observation is the household pair. Household can be uncolonized, 1 person can be colonized, both can be colonized (with same strain if dealing with muli-strain systems). 
+*It seems like this approach could suffer from severe bias** the transition from stage 2 to stage 3 is conditional on being colonized in stage 2, so the stage 2-3 transition is going to be occurring in a higher risk group than the 1-2 transition. Then again, this is an issue with any of these analyses--uncontrolled confounding will severely bias the results*
+```{r}
+
+# alt.mod1<-lapply(samples1, markov.func.hh.cluster)
+# 
+# #Point estimates for the within household rate. This is calculated by  looking at rate of transition from states 1->2 and 2->3. if no within HH transmission, these should be equal. if within HH, then 2->3 should be higher than 1->2
+# q.mat<-sapply(alt.mod1,'[[', 'q.mat', simplify = F)
+# q.mat.baseline<-sapply(q.mat,'[[', 'baseline', simplify = F)
+# q.transitions<-lapply(q.mat.baseline, function(x) c(x[1,2], x[2,3]) )
+# diff.rates<-sapply(q.transitions, function(x) x[2]- x[1]  )*duration
+# hist(diff.rates)
+# abline(v=prob.transmit, lty=2, col='red')
+```
+
+#Describe # of household co-occurrences
+```{r}
+
+
+```
+
+## JAGS estimation of Markov transition model
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5698102/#SD1
+```{r}
+
+jags.estimates<- lapply( samples1[1:3],jags.func)
+#duration.state<-sapply(jags.estimates,'[[', 'duration.state', simplify=F)
+post.q.prob.day<-sapply(jags.estimates,'[[', 'post.q.prob.day', simplify=F)
+
+```
