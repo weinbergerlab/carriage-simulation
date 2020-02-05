@@ -41,13 +41,13 @@ ntimes<-365*2 #How much observation time per person (in days)
 n.people <- 500  #How many people in total population- (set to 3000)
 nsim=50  #How many simulations
 qtr.rr<-c(1,0.8,0.4,1.2) #How much does acquisition rate differ by quarter (vs QTR1) 
-init.prev=0.05 #initialize prevalence at t=1 if have 0.042 init, then half pop will have prev of 0063, half will be 0.04=0.05
+init.prev=0.10 #initialize prevalence at t=1 if have 0.042 init, then half pop will have prev of 0063, half will be 0.04=0.05
 duration<-18  #See note below about the choice of duration: this results in 54% of people clearing within                          14 days
 
 # acq rate of 1/365, ses effect of 1.5 and transmission prob of 0.01 gives prevalence of 0.059
 set.acq.rate<-2/365 
 set.ses.effect<-1.0 #How much higher is acq rate in low vs high?
-prob.transmit<-0.1 #prob transmit to HH member--could set to 0.01 or 0.05 
+prob.transmit<-0.20 #prob transmit to HH member--could set to 0.01 or 0.05 or try to crank way up
 prob.transmit.day<-prob.transmit/duration
 
 ```
@@ -74,20 +74,32 @@ and t is time in days. According to Rochester study, 54% of events lasted <2week
  #Generate samples
  true.col<-replicate(nsim, gen.pair.data(acq.rate= set.acq.rate,clear.rate= 1/duration,prob.transmit=prob.transmit,duration=duration), simplify=FALSE)
   point.prev<-sapply(true.col, function(x) apply(x,1,mean))
- matplot(obs.dates.vec,point.prev, type='l', ylim=c(0,0.15), bty='l', ylab="Point prevalence")
+ matplot(obs.dates.vec,point.prev, type='l', ylim=c(0,0.30), bty='l', ylab="Point prevalence")
 
   
 samples1<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=500 ,n.cross.people=0, hh=T)) 
 
-samples2<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=400 ,n.cross.people=0,hh=T)) 
+samples2<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=450 ,n.cross.people=0,hh=T)) 
 
-samples3<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=300 ,n.cross.people=0, hh=T)) 
+samples3<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=400 ,n.cross.people=0, hh=T)) 
+samples4<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=350 ,n.cross.people=0, hh=T)) 
+
+
+#samples5<-lapply(true.col, function(x) sample.col(ds=x, sample.intervals=c(0,7,21,35,49,63),                           n.long.people=800 ,n.cross.people=0, hh=T)) 
 
 #test1<-t(true.col[[1]])
 #test2<-test1[3:4, 160:220]
 #samples.test<-samples1[[1]]
+
+prevalence<-sapply(samples1, function(x) mean(x$col) )
 ```
 
+
+```{r}
+true1<-true.col[[1]]
+heatmap(t(true1), scale='none',Colv =NA, Rowv=NA, col=c('white', 'red'), labCol =NA, labRow=NA )
+
+```
 
 
 #True vs estimated prevalence
@@ -110,6 +122,7 @@ plot(prev.est, prev.true,xlim=c(0,0.2), ylim=c(0,0.2), bty='l', main="True vs es
  return_gee(samples1)
  return_gee(samples2)
  return_gee(samples3)
+ return_gee(samples4)
 
 
 ```
@@ -119,13 +132,14 @@ plot(prev.est, prev.true,xlim=c(0,0.2), ylim=c(0,0.2), bty='l', main="True vs es
 markov1<-lapply(samples1, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
 markov2<-lapply(samples2, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
 markov3<-lapply(samples3, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
-
+markov4<-lapply(samples3, function(x)  markov.func(ds=x,ses.key=ses.grp.key))
 ```
 
 ```{r plotmarkov}
 plot_acq_rate_ratio(markov1)
 plot_acq_rate_ratio(markov2)
 plot_acq_rate_ratio(markov3)
+plot_acq_rate_ratio(markov4)
 
 ```
 
@@ -135,6 +149,7 @@ plot_acq_rate_ratio(markov3)
 plot_duration(markov1,duration=duration)
 plot_duration(markov2,duration=duration)
 plot_duration(markov3,duration=duration)
+plot_duration(markov4,duration=duration)
 
 ```
 
@@ -144,7 +159,7 @@ plot_duration(markov3,duration=duration)
 plot_acq_rate(markov1,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 plot_acq_rate(markov2,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 plot_acq_rate(markov3,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
-
+plot_acq_rate(markov4,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 ```
 
 
@@ -158,12 +173,19 @@ mse_acq_rate(markov1,set.acq.rate=set.acq.rate,set.ses.effect=set.ses.effect)
 Use the colonization status of the partner at previous time as predictor of acquisition (downside: can only )
 ```{r}
 
-markov1.hh<-lapply(samples1, function(x)  markov.func(ds=x,ses.key=ses.grp.key,hh.txn=T))
+markov3.hh<-lapply(samples3, function(x)  markov.func(ds=x,ses.key=ses.grp.key,hh.txn=T))
 
 
 ##Pull out HH transmission effect
-hh.txn.rr<-sapply(markov1.hh, "[[", 'acq.rate.ratio.hh')
-ses.rr<-sapply(markov1.hh, "[[", 'acq.rate.ratio')
+hh.txn.rr<-sapply(markov3.hh, "[[", 'acq.rate.ratio.hh')
+#ses.rr<-sapply(markov3.hh, "[[", 'acq.rate.ratio')
+```
+
+```{r}
+plot(hh.txn.rr['HR',], pch=16, ylim=range(hh.txn.rr))
+arrows(x0=1:ncol(hh.txn.rr), y0=hh.txn.rr[2,],y1=hh.txn.rr[3,] , length=0 )
+abline(h=1, col='gray', lty=2)
+abline(h=(1+prob.transmit), lty=3, lwd=2, col='black')
 
 
 ```
@@ -171,26 +193,45 @@ ses.rr<-sapply(markov1.hh, "[[", 'acq.rate.ratio')
 
 #New acq
 ```{r}
+new.acq.wrapper<-function(ds){
+        t1<-ds
+        t1.spl<-split(t1, t1$id)
+        t1.spl<-lapply(t1.spl, function(x) {lag(x$col, lag=1, na.pad = TRUE)
+          return(x) })
+        t2<-do.call(rbind, t1.spl)
+        t2$col.lag<- lag(t1$col, lag=1, na.pad = TRUE)
+        t2$new.acq<-NA
+        t2$new.acq[t2$col==1 & t2$col.lag==0] <-1
+        t2$new.acq[t2$col==0]<-0 #eligible to acquire if negative and not first time points
+        t2$new.acq[is.na(t2$col.lag)]<-NA #first time point can't acquire
+        t2$pair<- rep(c(1:(length(t1.spl)/2)), each=2)
+        table(t2$new.acq)
+        
+        acq.func<-function(ds2){
+          t1<-ds2
+          t1.spl<-split(t1, t1$id)
+          t1.spl<-lapply(t1.spl, function(x) {lag(x$col, lag=1, na.pad = TRUE)
+            return(x) })
+          t2<-do.call(rbind, t1.spl)
+          t2$col.lag<- lag(t1$col, lag=1, na.pad = TRUE)
+          t2$new.acq<-NA
+          t2$new.acq[t2$col==1 & t2$col.lag==0] <-1
+          t2$new.acq[t2$col==0]<-0 #eligible to acquire if negative and not first time points
+          t2$new.acq[is.na(t2$col.lag)]<-NA #first time point can't acquire
+          return(mean(t2$new.acq, na.rm=T))
+        }
+        #hist(sapply(samples1, FUN=acq.func))
+        #abline(v=set.acq.rate)
+        #hist(sapply(samples2, FUN=acq.func))
+        #hist(sapply(samples3, FUN=acq.func))
+        #hist(sapply(samples4, FUN=acq.func))
 
-t1<-samples1[[1]]
-t1.spl<-split(t1, t1$id)
-t1.spl<-lapply(t1.spl, function(x) {lag(x$col, lag=1, na.pad = TRUE)
-  return(x) })
-t2<-do.call(rbind, t1.spl)
-t2$col.lag<- lag(t1$col, lag=1, na.pad = TRUE)
-t2$new.acq<-NA
-t2$new.acq[t2$col==1 & t2$col.lag==0] <-1
-t2$new.acq[t2$col==0]<-0 #eligible to acquire if negative and not first time points
-t2$new.acq[is.na(t2$col.lag)]<-NA #first time point can't acquire
-t2$pair<- rep(c(1:(n.people/2)), each=2)
-table(t2$new.acq)
-
-time.points<- sum(ds$id==1) # how many samples per person
-        t2$t<-rep(1:time.points, times=n.people)
+        time.points<- sum(t2$id==1) # how many samples per person
+        t2$t<-rep(1:time.points, times=length(t1.spl))
         t3<-t2[,c('t','id','new.acq')]
         t3.m<-melt(t3, id.vars=c('id','t'))
         test1.c<-acast(t3.m,id~t)
-        pair<-rep(c(1:(n.people/2)), each=2)
+        pair<-rep(c(1:(length(t1.spl)/2)), each=2)
         test1.c.spl<-split(test1.c,pair)
         test1.c.spl<-lapply(test1.c.spl, function(x) matrix(x, nrow=2))
        
@@ -200,8 +241,15 @@ time.points<- sum(ds$id==1) # how many samples per person
         co.occurrence[(n.new.acq.person[,1]==0 & n.new.acq.person[,2]>0) |(n.new.acq.person[,2]==0 & n.new.acq.person[,1]>0)]<-2 #one person has new acq
         co.occurrence[(n.new.acq.person[,1]>0 & n.new.acq.person[,2]>0)]  <-3 #both people have new acq
        obs.co.occur<- as.numeric(table(co.occurrence))[3]
+       return(obs.co.occur)
+}       
+      mean(sapply(samples1, new.acq.wrapper) )
+      mean( sapply(samples2, new.acq.wrapper) )
+       mean(sapply(samples3, new.acq.wrapper) )
+       mean(sapply(samples4, new.acq.wrapper) )
        
-       #Regression to test if prevalence in partner is predictive of acquisition...
+       
+  #Regression to test if prevalence in partner is predictive of acquisition...
        
         
       ##Could do a Monte Carlo, switching group assignment labels, and see if n people in category 3 is unusual
@@ -223,7 +271,7 @@ time.points<- sum(ds$id==1) # how many samples per person
 
 ## Alternative structure for MSM
 The units of observation is the household pair. Household can be uncolonized, 1 person can be colonized, both can be colonized (with same strain if dealing with muli-strain systems). 
-*It seems like this approach could suffer from severe bias** the transition from stage 2 to stage 3 is conditional on being colonized in stage 2, so the stage 2-3 transition is going to be occurring in a higher risk group than the 1-2 transition. Then again, this is an issue with any of these analyses--uncontrolled confounding will severely bias the results*
+*It seems like this approach could suffer from severe bias** the transition from stage 2 to stage 3 is conditional on being colonized in stage 2, so the stage 2-3 transition is going to be occurring in a higher risk group than the 1-2 transition. Then again, this is an issue with any of these analyses--uncontrolled confounding will severely bias the results. A control for this could be to look at the rate of acquiring a discordant serotype within the Household*
 ```{r}
 
 # alt.mod1<-lapply(samples1, markov.func.hh.cluster)
@@ -245,10 +293,18 @@ The units of observation is the household pair. Household can be uncolonized, 1 
 
 ## JAGS estimation of Markov transition model
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5698102/#SD1
+2 acquisitions rates estimate: neither person colonized, partner colonized\
+
+https://pdfs.semanticscholar.org/7743/4a2c0ab12e686a9adcfd01fe60787eddb838.pdf
 ```{r}
 
-jags.estimates<- lapply( samples1[1:3],jags.func)
+jags.estimates<- lapply( samples3[1:3],jags.func)
 #duration.state<-sapply(jags.estimates,'[[', 'duration.state', simplify=F)
 post.q.prob.day<-sapply(jags.estimates,'[[', 'post.q.prob.day', simplify=F)
 
+beta_within_hh<-t(sapply(post.q.prob.day, function(x) x['beta_within_hh',], simplify=T))
+ilogit<-function(x){
+  exp(x)/(1+exp(x))
+}
+ilogit(x=(beta_within_hh))*18/14
 ```
