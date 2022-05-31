@@ -33,7 +33,9 @@ library(Matrix)
 library(geepack)
 library(doBy)
 
-source('./R/functions.R')
+source_file_list <- list.files(path="./R")
+source_file_list_dir <- sapply(source_file_list, function(x) paste0('./R/',x))
+sapply(source_file_list_dir, function(x) source(x) )
 ```
 
 ```{r set_parameters}
