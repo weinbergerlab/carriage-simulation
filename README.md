@@ -1,0 +1,1 @@
+This repository has two main files, which are used to evaluate the power to accurately quantify acquisition and clearance rates given different sampling schemes. simulation_markdown.Rmd considers sampling individuals, while simulation_markdown hh txn.Rmd includes transmission within a household when there is a pair of individuals in he household (household size=2)

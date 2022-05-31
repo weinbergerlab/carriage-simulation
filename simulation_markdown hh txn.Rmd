@@ -33,7 +33,7 @@ library(Matrix)
 library(geepack)
 library(doBy)
 
-source('C:/Users/dmw63/Desktop/My documents h/Pfizer carriage/carriage-simulation/functions.R')
+source('./R/functions.R')
 ```
 
 ```{r set_parameters}
@@ -47,7 +47,7 @@ duration<-18  #See note below about the choice of duration: this results in 54% 
 # acq rate of 1/365, ses effect of 1.5 and transmission prob of 0.01 gives prevalence of 0.059
 set.acq.rate<-2/365 
 set.ses.effect<-1.0 #How much higher is acq rate in low vs high?
-prob.transmit<-0.20 #prob transmit to HH member--could set to 0.01 or 0.05 or try to crank way up
+prob.transmit<-0.20 #cumulative prob transmit to HH member--could set to 0.01 or 0.05 or try to crank way up
 prob.transmit.day<-prob.transmit/duration
 
 ```

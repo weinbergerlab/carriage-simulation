@@ -29,7 +29,7 @@ library(Matrix)
 library(geepack)
 library(doBy)
 
-source('C:/Users/dmw63/Desktop/My documents h/Pfizer carriage/carriage-simulation/functions.R')
+source('./R/functions.R')
 ```
 
 ```{r set_parameters}
